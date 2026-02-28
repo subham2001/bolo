@@ -2,20 +2,73 @@
 <html>
 <head>
   <title>Bolo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <style>
-    body{margin:0;background:#000;color:#fff;font-family:monospace;display:flex;flex-direction:column;height:100vh}
-    #chat{flex:1;padding:20px;overflow-y:auto}
-    #bar{display:flex;border-top:1px solid #222}
-    input{flex:1;background:#000;color:#fff;border:none;padding:15px;outline:none}
-    button{background:#000;color:#fff;border:none;padding:15px}
-    .center{display:flex;align-items:center;justify-content:center;height:100vh;font-size:22px}
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #chat {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+      padding-bottom: 80px;
+    }
+
+    #bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      display: flex;
+      border-top: 1px solid #222;
+      background: #000;
+    }
+
+    input {
+      flex: 1;
+      background: #000;
+      color: #fff;
+      border: none;
+      padding: 18px;
+      font-size: 16px;
+      outline: none;
+    }
+
+    button {
+      background: #111;
+      color: #fff;
+      border: none;
+      padding: 0 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .center {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      height:100vh;
+      font-size:22px;
+    }
   </style>
 </head>
 <body>
+
 <div id="chat"></div>
+
 <div id="bar">
-  <input id="msg" placeholder="Type...">
-  <button onclick="send()">Send</button>
+  <input id="msg" placeholder="Type..." autocomplete="off">
+  <button id="sendBtn">Send</button>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -23,14 +76,19 @@
 const socket = io();
 let pc, dc;
 const chat = document.getElementById("chat");
+const input = document.getElementById("msg");
+const sendBtn = document.getElementById("sendBtn");
 
-socket.on("room-full",()=>document.body.innerHTML='<div class=center>ROOM FULL</div>');
+socket.on("room-full",()=>{
+  document.body.innerHTML='<div class=center>ROOM FULL</div>';
+});
 
 function add(m,self=false){
   const d=document.createElement("div");
   d.textContent=(self?"You: ":"Them: ")+m;
+  d.style.marginBottom = "8px";
   chat.appendChild(d);
-  chat.scrollTop=chat.scrollHeight;
+  chat.scrollTop = chat.scrollHeight;
 }
 
 async function init(caller){
@@ -73,13 +131,23 @@ socket.on("peer-joined",()=>init(true));
 socket.on("connect",()=>init(false));
 
 function send(){
-  const v=msg.value;
-  if(dc&&v){
+  const v=input.value.trim();
+  if(dc && v){
     dc.send(v);
     add(v,true);
-    msg.value="";
+    input.value="";
   }
 }
+
+sendBtn.onclick = send;
+
+// ENTER key support
+input.addEventListener("keydown", e=>{
+  if(e.key === "Enter"){
+    e.preventDefault();
+    send();
+  }
+});
 </script>
 </body>
 </html>
