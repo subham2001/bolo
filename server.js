@@ -26,8 +26,11 @@ io.on("connection", socket => {
   });
 
   socket.on("disconnect", () => {
-    users = users.filter(u => u !== socket);
-  });
+  users = users.filter(u => u !== socket);
+
+  // Tell remaining user the room ended
+  socket.broadcast.emit("room-ended");
+});
 });
 
 server.listen(process.env.PORT || 3000, () =>
