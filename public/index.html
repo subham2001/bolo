@@ -3,16 +3,12 @@
 <head>
   <title>Bolo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
   <style>
-    * { box-sizing: border-box; }
-
     body {
       margin: 0;
       font-family: system-ui, sans-serif;
       background: radial-gradient(circle at top, #0f0f1a, #000);
       color: white;
-      overflow: hidden;
     }
 
     #chat {
@@ -21,50 +17,38 @@
       padding: 20px 15px 90px;
     }
 
-    /* Chat bubbles */
     .bubble {
       max-width: 75%;
       padding: 12px 14px;
       margin: 8px 0;
       border-radius: 16px;
       line-height: 1.4;
-      animation: fadeIn .25s ease;
     }
 
     .me {
       background: linear-gradient(135deg, #00f5ff, #6a5cff);
       margin-left: auto;
-      border-bottom-right-radius: 6px;
-      box-shadow: 0 0 12px rgba(0,245,255,.3);
     }
 
     .them {
       background: #1c1c2a;
-      border-bottom-left-radius: 6px;
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Bottom bar */
     #bar {
       position: fixed;
       bottom: 0;
       width: 100%;
       display: flex;
       padding: 10px;
+      background: rgba(0,0,0,.6);
       backdrop-filter: blur(10px);
-      background: rgba(0,0,0,.5);
-      border-top: 1px solid rgba(255,255,255,.05);
     }
 
     input {
       flex: 1;
       border: none;
       border-radius: 14px;
-      padding: 14px 16px;
+      padding: 14px;
       font-size: 16px;
       outline: none;
       background: #12121c;
@@ -77,14 +61,10 @@
       padding: 0 18px;
       border-radius: 14px;
       font-weight: 600;
-      cursor: pointer;
       background: linear-gradient(135deg,#00f5ff,#6a5cff);
       color: black;
-      box-shadow: 0 0 12px rgba(0,245,255,.5);
-      transition: transform .15s ease;
+      cursor: pointer;
     }
-
-    button:active { transform: scale(.95); }
 
     .center {
       display:flex;
@@ -92,7 +72,6 @@
       justify-content:center;
       height:100vh;
       font-size:20px;
-      opacity:.7;
     }
   </style>
 </head>
@@ -108,7 +87,6 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 const socket = io();
-let pc, dc;
 const chat = document.getElementById("chat");
 const input = document.getElementById("msg");
 
@@ -117,8 +95,12 @@ socket.on("room-full",()=>{
   document.body.innerHTML='<div class=center>Room Full</div>';
 });
 
-// Add message bubble
-function add(msg, self=false){
+// Receive message
+socket.on("message", msg=>{
+  add(msg,false);
+});
+
+function add(msg,self){
   const d=document.createElement("div");
   d.className="bubble "+(self?"me":"them");
   d.textContent=msg;
@@ -126,71 +108,15 @@ function add(msg, self=false){
   chat.scrollTop=chat.scrollHeight;
 }
 
-// ===== WebRTC =====
-async function start(isCaller){
-  pc = new RTCPeerConnection({
-    iceServers:[
-      {urls:"stun:stun.l.google.com:19302"},
-      {urls:"stun:stun1.l.google.com:19302"}
-    ]
-  });
-
-  pc.ondatachannel = e=>{
-    dc = e.channel;
-    setupDC();
-  };
-
-  if(isCaller){
-    dc = pc.createDataChannel("chat");
-    setupDC();
-  }
-
-  pc.onicecandidate = e=>{
-    if(e.candidate) socket.emit("signal",{ice:e.candidate});
-  };
-
-  socket.on("signal", async data=>{
-    if(data.sdp){
-      await pc.setRemoteDescription(data.sdp);
-      if(data.sdp.type==="offer"){
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit("signal",{sdp:pc.localDescription});
-      }
-    }
-    if(data.ice){
-      try{ await pc.addIceCandidate(data.ice);}catch{}
-    }
-  });
-
-  if(isCaller){
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit("signal",{sdp:pc.localDescription});
-  }
-}
-
-function setupDC(){
-  dc.onopen = ()=>console.log("Connected");
-  dc.onmessage = e=>add(e.data);
-}
-
-socket.on("peer-ready", ()=>start(true));
-socket.on("connect", ()=>start(false));
-
-// Send
 function send(){
   const v=input.value.trim();
-  if(!dc || dc.readyState!=="open"){
-    alert("Connecting...");
-    return;
-  }
-  dc.send(v);
+  if(!v) return;
+  socket.emit("message", v);
   add(v,true);
   input.value="";
 }
 
-// Enter key
+// Enter key support
 input.addEventListener("keydown",e=>{
   if(e.key==="Enter") send();
 });
