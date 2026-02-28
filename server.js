@@ -10,26 +10,32 @@ let users = 0;
 
 app.use(express.static("public"));
 
+const users = [];
+
 io.on("connection", socket => {
-  if (users >= 2) {
+  if (users.length >= 2) {
     socket.emit("room-full");
     socket.disconnect();
     return;
   }
 
-  users++;
-  socket.broadcast.emit("peer-joined");
+  users.push(socket);
+
+  if (users.length === 2) {
+    users[0].emit("peer-ready");
+    users[1].emit("peer-ready");
+  }
 
   socket.on("signal", data => {
-    socket.broadcast.emit("signal", data);
+    const other = users.find(u => u !== socket);
+    if (other) other.emit("signal", data);
   });
 
   socket.on("disconnect", () => {
-    users--;
+    const i = users.indexOf(socket);
+    if (i !== -1) users.splice(i, 1);
   });
 });
-
-server.listen(process.env.PORT || 3000);
 
 // Keep sockets alive
 setInterval(() => {
