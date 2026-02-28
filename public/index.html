@@ -9,56 +9,90 @@
 
     body {
       margin: 0;
-      background: #000;
-      color: #fff;
-      font-family: monospace;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
+      font-family: system-ui, sans-serif;
+      background: radial-gradient(circle at top, #0f0f1a, #000);
+      color: white;
+      overflow: hidden;
     }
 
     #chat {
-      flex: 1;
-      padding: 15px;
+      height: 100vh;
       overflow-y: auto;
-      padding-bottom: 80px;
+      padding: 20px 15px 90px;
     }
 
+    /* Chat bubbles */
+    .bubble {
+      max-width: 75%;
+      padding: 12px 14px;
+      margin: 8px 0;
+      border-radius: 16px;
+      line-height: 1.4;
+      animation: fadeIn .25s ease;
+    }
+
+    .me {
+      background: linear-gradient(135deg, #00f5ff, #6a5cff);
+      margin-left: auto;
+      border-bottom-right-radius: 6px;
+      box-shadow: 0 0 12px rgba(0,245,255,.3);
+    }
+
+    .them {
+      background: #1c1c2a;
+      border-bottom-left-radius: 6px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Bottom bar */
     #bar {
       position: fixed;
       bottom: 0;
-      left: 0;
       width: 100%;
       display: flex;
-      border-top: 1px solid #222;
-      background: #000;
+      padding: 10px;
+      backdrop-filter: blur(10px);
+      background: rgba(0,0,0,.5);
+      border-top: 1px solid rgba(255,255,255,.05);
     }
 
     input {
       flex: 1;
-      background: #000;
-      color: #fff;
       border: none;
-      padding: 18px;
+      border-radius: 14px;
+      padding: 14px 16px;
       font-size: 16px;
       outline: none;
+      background: #12121c;
+      color: white;
     }
 
     button {
-      background: #111;
-      color: #fff;
+      margin-left: 10px;
       border: none;
-      padding: 0 20px;
-      font-size: 16px;
+      padding: 0 18px;
+      border-radius: 14px;
+      font-weight: 600;
       cursor: pointer;
+      background: linear-gradient(135deg,#00f5ff,#6a5cff);
+      color: black;
+      box-shadow: 0 0 12px rgba(0,245,255,.5);
+      transition: transform .15s ease;
     }
+
+    button:active { transform: scale(.95); }
 
     .center {
       display:flex;
       align-items:center;
       justify-content:center;
       height:100vh;
-      font-size:22px;
+      font-size:20px;
+      opacity:.7;
     }
   </style>
 </head>
@@ -67,8 +101,8 @@
 <div id="chat"></div>
 
 <div id="bar">
-  <input id="msg" placeholder="Type..." autocomplete="off">
-  <button id="sendBtn">Send</button>
+  <input id="msg" placeholder="Say something…" autocomplete="off">
+  <button onclick="send()">Send</button>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -77,98 +111,88 @@ const socket = io();
 let pc, dc;
 const chat = document.getElementById("chat");
 const input = document.getElementById("msg");
-const sendBtn = document.getElementById("sendBtn");
 
+// Room full
 socket.on("room-full",()=>{
-  document.body.innerHTML='<div class=center>ROOM FULL</div>';
+  document.body.innerHTML='<div class=center>Room Full</div>';
 });
 
-function add(m,self=false){
+// Add message bubble
+function add(msg, self=false){
   const d=document.createElement("div");
-  d.textContent=(self?"You: ":"Them: ")+m;
-  d.style.marginBottom = "8px";
+  d.className="bubble "+(self?"me":"them");
+  d.textContent=msg;
   chat.appendChild(d);
-  chat.scrollTop = chat.scrollHeight;
+  chat.scrollTop=chat.scrollHeight;
 }
 
-async function init(isCaller) {
+// ===== WebRTC =====
+async function start(isCaller){
   pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" }
+    iceServers:[
+      {urls:"stun:stun.l.google.com:19302"},
+      {urls:"stun:stun1.l.google.com:19302"}
     ]
   });
 
-  // Receiver side
-  pc.ondatachannel = e => {
+  pc.ondatachannel = e=>{
     dc = e.channel;
-    dc.onopen = () => console.log("Connected");
-    dc.onmessage = e => add(e.data);
+    setupDC();
   };
 
-  // Caller side
-  if (isCaller) {
+  if(isCaller){
     dc = pc.createDataChannel("chat");
-    dc.onopen = () => console.log("Connected");
-    dc.onmessage = e => add(e.data);
+    setupDC();
   }
 
-  pc.onicecandidate = e => {
-    if (e.candidate) {
-      socket.emit("signal", { ice: e.candidate });
-    }
+  pc.onicecandidate = e=>{
+    if(e.candidate) socket.emit("signal",{ice:e.candidate});
   };
 
-  socket.on("signal", async data => {
-    if (data.sdp) {
+  socket.on("signal", async data=>{
+    if(data.sdp){
       await pc.setRemoteDescription(data.sdp);
-
-      if (data.sdp.type === "offer") {
+      if(data.sdp.type==="offer"){
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        socket.emit("signal", { sdp: pc.localDescription });
+        socket.emit("signal",{sdp:pc.localDescription});
       }
     }
-
-    if (data.ice) {
-      try { await pc.addIceCandidate(data.ice); } catch {}
+    if(data.ice){
+      try{ await pc.addIceCandidate(data.ice);}catch{}
     }
   });
 
-  // Caller creates offer
-  if (isCaller) {
+  if(isCaller){
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    socket.emit("signal", { sdp: pc.localDescription });
+    socket.emit("signal",{sdp:pc.localDescription});
   }
 }
 
-socket.on("peer-joined",()=>init(true));
-socket.on("connect",()=>init(false));
+function setupDC(){
+  dc.onopen = ()=>console.log("Connected");
+  dc.onmessage = e=>add(e.data);
+}
 
+socket.on("peer-joined", ()=>start(true));
+socket.on("connect", ()=>start(false));
+
+// Send
 function send(){
-  const v = input.value.trim();
-
-  if(!dc || dc.readyState !== "open"){
-    alert("Still connecting...");
+  const v=input.value.trim();
+  if(!dc || dc.readyState!=="open"){
+    alert("Connecting...");
     return;
   }
-
-  if(v){
-    dc.send(v);
-    add(v, true);
-    input.value = "";
-  }
+  dc.send(v);
+  add(v,true);
+  input.value="";
 }
 
-sendBtn.onclick = send;
-
-// ENTER key support
-input.addEventListener("keydown", e=>{
-  if(e.key === "Enter"){
-    e.preventDefault();
-    send();
-  }
+// Enter key
+input.addEventListener("keydown",e=>{
+  if(e.key==="Enter") send();
 });
 </script>
 </body>
