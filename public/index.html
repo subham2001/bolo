@@ -175,7 +175,7 @@ function setupDC(){
   dc.onmessage = e=>add(e.data);
 }
 
-socket.on("peer-joined", ()=>start(true));
+socket.on("peer-ready", ()=>start(true));
 socket.on("connect", ()=>start(false));
 
 // Send
