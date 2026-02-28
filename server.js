@@ -30,3 +30,8 @@ io.on("connection", socket => {
 });
 
 server.listen(process.env.PORT || 3000);
+
+// Keep sockets alive
+setInterval(() => {
+  io.emit("ping");
+}, 15000);
