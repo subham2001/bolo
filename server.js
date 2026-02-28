@@ -6,13 +6,12 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-let users = 0;
+const users = []; // store 2 sockets
 
 app.use(express.static("public"));
 
-const users = [];
-
 io.on("connection", socket => {
+  // Limit to 2 users
   if (users.length >= 2) {
     socket.emit("room-full");
     socket.disconnect();
@@ -21,13 +20,14 @@ io.on("connection", socket => {
 
   users.push(socket);
 
+  // When both present, notify
   if (users.length === 2) {
-    users[0].emit("peer-ready");
-    users[1].emit("peer-ready");
+    users.forEach(s => s.emit("peer-ready"));
   }
 
+  // Relay signals directly
   socket.on("signal", data => {
-    const other = users.find(u => u !== socket);
+    const other = users.find(s => s !== socket);
     if (other) other.emit("signal", data);
   });
 
@@ -37,7 +37,4 @@ io.on("connection", socket => {
   });
 });
 
-// Keep sockets alive
-setInterval(() => {
-  io.emit("ping");
-}, 15000);
+server.listen(process.env.PORT || 3000);
